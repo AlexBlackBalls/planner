@@ -1,0 +1,26 @@
+# Виртуальное окружение
+venv/
+.venv/
+env/
+
+# Кэш Python (автоматически создаваемые файлы)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Файлы настроек редакторов (VS Code, PyCharm)
+.vscode/
+.idea/
+
+# Секретные файлы с паролями и токенами (если будете их использовать)
+.env
+secret_key.txt
+
+# Логи и временные файлы
+*.log
+.pytest_cache/
+
+planner.db
+frontend.png
+newfront.png

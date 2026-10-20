@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Планировщик дня</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("theme")||"dark"}catch(e){}</script>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#1b1e27; --panel:#232733; --panel2:#2b3040; --border:#383e51;
+  --text:#e8eaf1; --muted:#8f97ab; --accent:#7f9cf5; --imp:#f2b64b; --danger:#ef6f7e; --wk:#e89aa5; --ok:#6fcf97; --on-accent:#14182a; --on-danger:#2a0f14;
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#f1f3f8; --panel:#ffffff; --panel2:#e9ecf4; --border:#d3d8e4;
+  --text:#1d2230; --muted:#667085; --accent:#4a6cf0; --imp:#d98a00; --danger:#d6455d; --wk:#c75a6c; --ok:#2e9e62;
+  --on-accent:#ffffff; --on-danger:#ffffff;
+}
+:root[data-theme="light"] .img img{filter:invert(1)}
+:root[data-theme="light"] dialog::backdrop{background:rgba(30,35,50,.35)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+.hidden{display:none!important}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--border);background:var(--panel2);border-radius:10px;padding:10px 14px;text-align:left}
+button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+input[type=text],input[type=password],input[type=date],input[type=time]{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);margin-bottom:10px}
+label.chk{display:flex;gap:8px;align-items:center;margin-bottom:12px;cursor:pointer}
+input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
+svg.i{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px}
+.muted{color:var(--muted);font-size:14px}
+.err{color:var(--danger);min-height:20px;font-size:14px}
+
+/* вход */
+.auth{max-width:380px;margin:12vh auto 0;padding:20px}
+.auth h1{margin:0 0 14px;font-size:20px}
+.auth .row{display:flex;gap:10px;align-items:center}
+.link{background:none;border:none;color:var(--accent);padding:0;text-decoration:underline}
+
+/* раскладка */
+.layout{display:grid;gap:14px;padding:16px;max-width:1840px;margin:0 auto;
+  grid-template-columns:250px minmax(0,1fr) 440px;
+  grid-template-rows:auto auto 1fr auto;
+  grid-template-areas:"quote quote img" "side cal img" "side up up" "extra extra extra"}
+.quote{grid-area:quote;padding:4px 4px 6px;display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap}
+.quote .in{display:inline-block}
+.clock{margin-left:auto;text-align:right;font-variant-numeric:tabular-nums}
+.clock .tm{font-size:clamp(44px,6vw,84px);line-height:1;font-weight:300;letter-spacing:.02em}
+.clock .c{animation:blink 1s infinite}
+.clock .dt{margin-top:6px;color:var(--muted);font-size:18px}
+@keyframes blink{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.clock .c{animation:none}}
+.quote blockquote{margin:0;font:italic 400 clamp(32px,6vw,64px)/1.1 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;letter-spacing:.01em}
+.quote .by{margin-top:8px;text-align:right;color:var(--muted);font:italic 17px Georgia,serif}
+.side{grid-area:side;display:flex;flex-direction:column;gap:10px;align-self:start}
+.cal{grid-area:cal;min-width:0;display:flex;flex-direction:column}
+.img{grid-area:img;display:flex;align-items:flex-start;justify-content:center}
+.img img{display:block;width:100%;height:auto;object-fit:contain}
+.up{grid-area:up;min-width:0}
+
+/* кнопки слева */
+.nb{display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;font-size:17px}
+.nb .ico{flex:none;width:46px;height:46px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 18%,transparent);color:var(--c)}
+.nb .tx{display:flex;flex-direction:column;line-height:1.2}
+.nb small{color:var(--muted);font-size:12.5px;margin-top:2px;font-weight:400}
+.nb.primary .ico{background:color-mix(in srgb,var(--on-accent) 20%,transparent);color:var(--on-accent)}
+.nb.primary small{color:color-mix(in srgb,var(--on-accent) 75%,transparent)}
+.nb.active{border-color:var(--danger)}
+
+/* статистика */
+.stats{display:flex;flex-direction:column;gap:14px}
+.sr{display:flex;align-items:center;gap:14px}
+.nums{display:flex;flex-direction:column;gap:5px;font-size:14px}
+.nums i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}
+.bars{display:flex;align-items:flex-end;gap:6px;height:84px}
+.bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;font-size:11px;color:var(--muted)}
+.bar i{display:block;width:100%;border-radius:4px 4px 2px 2px;background:color-mix(in srgb,var(--accent) 40%,var(--panel2))}
+.bar.t i{background:var(--accent)}
+.bar.t{color:var(--text)}
+
+/* календарь */
+.calhead{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.calhead .title{flex:1;text-align:center;line-height:1.2}
+.calhead .title b{display:block;font-size:20px}
+.arrow{width:42px;height:42px;padding:0;border-radius:50%;display:grid;place-items:center;background:var(--panel2)}
+.arrow svg{stroke-width:2.4}
+.arrow:hover{background:var(--accent);color:var(--on-accent)}
+.days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;flex:1}
+.day{background:var(--panel2);border:1px solid var(--border);border-radius:10px;min-height:200px;padding:8px;min-width:0}
+.day.today{border-color:var(--accent)}
+.dh{display:flex;justify-content:space-between;align-items:baseline}
+.dh b{font-size:17px}
+.dh.we b{color:var(--wk)}
+.dh span{color:var(--muted);font-size:13px}
+.dp{display:flex;align-items:center;gap:6px;margin:6px 0 2px;font-size:12px;color:var(--muted)}
+.dp .mini{flex:1;height:4px;border-radius:2px;background:var(--border);overflow:hidden}
+.dp .mini i{display:block;height:100%;background:var(--ok)}
+.ev{display:block;width:100%;margin-top:6px;padding:6px 8px;border-radius:6px;border:none;border-left:3px solid var(--accent);background:var(--panel);font-size:13px;word-break:break-word}
+.ev .t{color:var(--muted);margin-right:4px}
+.ev.imp{border-left-color:var(--imp);background:color-mix(in srgb,var(--imp) 16%,var(--panel));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--imp) 45%,transparent)}
+.ev.done{opacity:.5;text-decoration:line-through}
+body.delmode .ev{outline:1px dashed var(--danger);cursor:crosshair}
+
+/* ближайшие события: перенос на новые строки */
+.up h2{margin:0 0 10px;font-size:16px}
+.uplist{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.upc{display:flex;flex-direction:column;gap:8px;min-height:110px}
+.upc.imp{border-color:var(--imp)}
+.upc b{font-weight:600;word-break:break-word}
+.upc .d{display:flex;justify-content:space-between;align-items:center;gap:6px;color:var(--muted);font-size:13px}
+.chip{border-radius:10px;padding:1px 9px;font-size:12px;background:var(--panel2);color:var(--text)}
+.chip.now{background:var(--accent);color:var(--on-accent)}
+
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:18px;width:min(380px,92vw)}
+dialog::backdrop{background:rgba(10,12,18,.6)}
+dialog h3{margin:0 0 12px;font-size:17px;word-break:break-word}
+.btns{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:10px}
+.btns button{text-align:center}
+
+/* мини-календарь */
+.mcal .mh{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.arrow.sm{width:32px;height:32px}
+.arrow.sm svg{width:18px;height:18px}
+.mgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.mgrid .wl{font-size:11px;color:var(--muted);padding:2px 0}
+.md{position:relative;aspect-ratio:1;padding:0;border:none;background:none;border-radius:8px;text-align:center;font-size:13px}
+.md:hover{background:var(--panel2)}
+.md.o{color:var(--muted);opacity:.55}
+.md.w{background:var(--panel2)}
+.md.t{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.md .dot{position:absolute;left:50%;bottom:3px;width:5px;height:5px;margin-left:-2.5px;border-radius:50%;background:var(--accent)}
+.md .dot.i{background:var(--imp)}
+
+/* нижняя полоса */
+.extra{grid-area:extra;display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+.blk h2{margin:0;font-size:16px}
+.bh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+textarea{width:100%;height:190px;resize:vertical;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);font:inherit;color:inherit;line-height:1.5}
+textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.hh,.hr{display:grid;grid-template-columns:minmax(0,1fr) repeat(7,22px) 44px 20px;gap:4px;align-items:center;margin-bottom:6px}
+.hh span{text-align:center;font-size:11px;color:var(--muted)}
+.hn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hd{display:block;width:22px;height:22px;padding:0;border-radius:50%;border:2px solid var(--border);background:transparent}
+.hd.on{background:var(--ok);border-color:var(--ok)}
+.hd.today{border-color:var(--accent)}
+.hd.on.today{border-color:var(--ok)}
+.hd:disabled{opacity:.3;cursor:default}
+.x{width:20px;height:20px;padding:0;border:none;background:none;color:var(--muted);text-align:center}
+.x:hover{color:var(--danger)}
+.addrow{display:flex;gap:8px;align-items:center;margin-top:10px}
+.addrow input{margin:0}
+.heat{display:grid;grid-template-rows:repeat(7,auto);grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;max-width:480px}
+.heat i,.legend i{display:block;aspect-ratio:1;border-radius:4px;background:var(--panel2)}
+.l1{background:color-mix(in srgb,var(--ok) 28%,var(--panel2))!important}
+.l2{background:color-mix(in srgb,var(--ok) 50%,var(--panel2))!important}
+.l3{background:color-mix(in srgb,var(--ok) 74%,var(--panel2))!important}
+.l4{background:var(--ok)!important}
+.heat i.fut{opacity:.25}
+.heat i.td{outline:2px solid var(--accent);outline-offset:1px}
+.legend{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);margin-top:10px}
+.legend i{width:14px;height:14px;aspect-ratio:auto;border-radius:3px}
+
+button.danger{background:var(--danger);border-color:var(--danger);color:var(--on-danger);font-weight:600}
+#cfDlg{width:min(340px,92vw);text-align:center}
+#cfDlg h3{margin-bottom:6px}
+#cfText{margin-bottom:18px;word-break:break-word}
+.toast{display:none;inset:auto;left:50%;bottom:24px;transform:translateX(-50%);margin:0;background:var(--panel2);color:var(--text);border:1px solid var(--danger);border-radius:10px;padding:10px 16px;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.toast:popover-open{display:block}
+
+@media (max-width:1600px){
+  .layout{grid-template-columns:240px minmax(0,1fr) 340px}
+}
+@media (max-width:1250px){
+  .layout{grid-template-columns:240px minmax(0,1fr);grid-template-rows:auto 1fr auto auto auto;grid-template-areas:"quote quote" "side cal" "side img" "up up" "extra extra"}
+  .img img{max-height:230px}
+}
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr;grid-template-areas:"quote" "side" "cal" "img" "up" "extra"}
+  .side{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+  .stats,.mcal{grid-column:1/-1}
+  .days{grid-template-columns:1fr}
+  .day{min-height:0}
+}
+</style>
+</head>
+<body>
+
+<div id="auth" class="auth panel hidden">
+  <h1 id="authTitle">Вход</h1>
+  <input id="username" type="text" placeholder="Имя пользователя" autocomplete="username">
+  <input id="password" type="password" placeholder="Пароль (минимум 8 символов)" autocomplete="current-password">
+  <input id="invite" type="text" class="hidden" placeholder="Код-приглашение">
+  <div id="authErr" class="err"></div>
+  <div class="row">
+    <button id="authBtn" class="primary">Войти</button>
+    <button id="authSwitch" class="link">Нет аккаунта? Регистрация</button>
+  </div>
+</div>
+
+<div id="app" class="layout hidden">
+  <header class="quote">
+    <div class="in">
+      <blockquote>Я не забуду никогда...</blockquote>
+      <div class="by">©Муцураев Т.Х., 2001</div>
+    </div>
+    <div class="clock">
+      <div class="tm"><span id="hh"></span><span class="c">:</span><span id="mm"></span></div>
+      <div class="dt" id="dt"></div>
+    </div>
+  </header>
+
+  <aside class="side">
+    <button id="addBtn" class="nb primary" style="--c:var(--on-accent)">
+      <span class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      <span class="tx">Добавить событие<small>в календарь</small></span>
+    </button>
+    <button id="delBtn" class="nb" style="--c:var(--danger)">
+      <span class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V4h6v3"/></svg></span>
+      <span class="tx">Удалить событие<small id="delSub">режим выключен</small></span>
+    </button>
+    <button id="todayBtn" class="nb" style="--c:var(--accent)">
+      <span class="ico"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/></svg></span>
+      <span class="tx">Сегодня<small id="todaySub"></small></span>
+    </button>
+    <button id="themeBtn" class="nb" style="--c:var(--imp)">
+      <span class="ico"><svg id="themeIcon" class="i" viewBox="0 0 24 24"></svg></span>
+      <span class="tx">Тема<small id="themeSub">тёмная</small></span>
+    </button>
+    <button id="logout" class="nb" style="--c:var(--muted)">
+      <span class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M10 4H6a2 2 0 00-2 2v12a2 2 0 002 2h4M15 8l4 4-4 4M19 12H9"/></svg></span>
+      <span class="tx">Выйти</span>
+    </button>
+
+    <div class="panel stats">
+      <div class="sr">
+        <div id="ring"></div>
+        <div class="nums">
+          <div><i style="background:var(--accent)"></i><span id="nAll">0</span> на неделе</div>
+          <div><i style="background:var(--ok)"></i><span id="nDone">0</span> выполнено</div>
+          <div><i style="background:var(--imp)"></i><span id="nImp">0</span> важных</div>
+        </div>
+      </div>
+      <div id="bars" class="bars"></div>
+    </div>
+
+    <div class="panel mcal">
+      <div class="mh">
+        <button id="mPrev" class="arrow sm" aria-label="Предыдущий месяц"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <b id="mTitle"></b>
+        <button id="mNext" class="arrow sm" aria-label="Следующий месяц"><svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+      </div>
+      <div id="mGrid" class="mgrid"></div>
+    </div>
+  </aside>
+
+  <section class="cal panel">
+    <div class="calhead">
+      <button id="prev" class="arrow" aria-label="Предыдущая неделя"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <div class="title"><b id="month"></b><span class="muted" id="range"></span></div>
+      <button id="next" class="arrow" aria-label="Следующая неделя"><svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+    <div id="hint" class="muted hidden" style="margin-bottom:8px">Режим удаления: нажмите на событие, чтобы удалить его.</div>
+    <div id="days" class="days"></div>
+  </section>
+
+  <section class="img"><img src="/hero.png" alt=""></section>
+
+  <section class="up panel">
+    <h2>Ближайшие события</h2>
+    <div id="upList" class="uplist"></div>
+  </section>
+
+  <section class="extra">
+    <div class="panel blk">
+      <div class="bh"><h2>Заметки</h2><span id="noteSt" class="muted"></span></div>
+      <textarea id="notes" maxlength="5000" placeholder="Мысли, списки, идеи…"></textarea>
+      <div class="muted" style="text-align:right"><span id="noteCnt">0</span>/5000</div>
+    </div>
+    <div class="panel blk">
+      <div class="bh"><h2>Привычки</h2><span class="muted">серия — дней подряд</span></div>
+      <div id="habits"></div>
+      <div class="addrow">
+        <input id="habitName" type="text" placeholder="Новая привычка" maxlength="60">
+        <button id="habitAdd" class="arrow" aria-label="Добавить привычку"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+    </div>
+    <div class="panel blk">
+      <div class="bh"><h2>Активность</h2><span id="heatTot" class="muted"></span></div>
+      <div id="heat" class="heat"></div>
+      <div class="legend">меньше <i></i><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i> больше</div>
+    </div>
+  </section>
+</div>
+
+<dialog id="cfDlg">
+  <h3 id="cfTitle"></h3>
+  <div id="cfText" class="muted"></div>
+  <div class="btns">
+    <button id="cfOk" class="danger">Удалить</button>
+    <button id="cfNo" autofocus>Отмена</button>
+  </div>
+</dialog>
+
+<div id="toast" class="toast" popover="manual"></div>
+
+<dialog id="addDlg">
+  <h3>Новое событие</h3>
+  <input id="newTitle" type="text" placeholder="Что нужно сделать?" maxlength="200">
+  <input id="newDate" type="date">
+  <input id="newTime" type="time">
+  <label class="chk"><input id="newImp" type="checkbox"> Важное событие</label>
+  <div id="addErr" class="err"></div>
+  <div class="btns">
+    <button id="addOk" class="primary">Добавить</button>
+    <button id="addCancel">Отмена</button>
+  </div>
+</dialog>
+
+<dialog id="evDlg">
+  <h3 id="evTitle"></h3>
+  <label class="chk"><input id="evDone" type="checkbox"> Выполнено</label>
+  <label class="chk"><input id="evImp" type="checkbox"> Важное событие</label>
+  <div class="muted" style="margin-bottom:6px">Перенести на другой день:</div>
+  <input id="evDate" type="date">
+  <div class="btns">
+    <button id="evMove" class="primary">Перенести</button>
+    <button id="evClose">Закрыть</button>
+  </div>
+</dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+const z = n => String(n).padStart(2, '0');
+const fmt = d => d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
+const today = () => fmt(new Date());
+const shift = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return fmt(d); };
+const monday = iso => shift(iso, -((new Date(iso + 'T12:00:00').getDay() + 6) % 7));
+const ddmm = iso => iso.slice(8) + '.' + iso.slice(5, 7);
+const WD = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const cap = s => s[0].toUpperCase() + s.slice(1);
+const daysFromToday = iso => Math.round((new Date(iso + 'T12:00:00') - new Date(today() + 'T12:00:00')) / 864e5);
+
+let start = monday(today());   // понедельник показанной недели
+let deleteMode = false, current = null, registerMode = false;
+const monthOf = iso => iso.slice(0, 7) + '-01';
+let mini = monthOf(shift(start, 3));   // первое число месяца в мини-календаре
+
+// часы
+function tick() {
+  const n = new Date();
+  $('#hh').textContent = z(n.getHours());
+  $('#mm').textContent = z(n.getMinutes());
+  $('#dt').textContent = cap(n.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).replace(' г.', ''));
+}
+tick(); setInterval(tick, 1000);
+
+function el(tag, props = {}, kids = []) {
+  const e = Object.assign(document.createElement(tag), props);
+  kids.forEach(k => e.append(k));
+  return e;
+}
+
+async function api(path, method = 'GET', body) {
+  const r = await fetch('/api' + path, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (r.status === 401 && path !== '/login') { showAuth(); throw new Error('auth'); }
+  if (!r.ok) {
+    let msg = 'Ошибка';
+    try { const j = await r.json(); msg = typeof j.detail === 'string' ? j.detail : 'Проверьте введённые данные'; } catch (e) {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+// ---------- тема ----------
+const MOON = '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>';
+const SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('theme', t); } catch (e) {}
+  $('#themeSub').textContent = t === 'light' ? 'светлая' : 'тёмная';
+  $('#themeIcon').innerHTML = t === 'light' ? SUN : MOON;
+}
+$('#themeBtn').onclick = () => applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+applyTheme(document.documentElement.dataset.theme || 'dark');
+
+// ---------- подтверждение и уведомления внутри сервиса ----------
+function ask(title, text, okLabel = 'Удалить') {
+  return new Promise(res => {
+    const dlg = $('#cfDlg');
+    $('#cfTitle').textContent = title;
+    $('#cfText').textContent = text;
+    $('#cfOk').textContent = okLabel;
+    const done = v => { dlg.close(); res(v); };
+    $('#cfOk').onclick = () => done(true);
+    $('#cfNo').onclick = () => done(false);
+    dlg.oncancel = () => res(false);   // клавиша Esc
+    dlg.showModal();
+  });
+}
+
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  if (t.showPopover) { if (!t.matches(':popover-open')) t.showPopover(); } else t.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    if (t.hidePopover) { try { t.hidePopover(); } catch (e) {} } else t.style.display = 'none';
+  }, 4000);
+}
+
+// ---------- вход ----------
+function showAuth() { $('#app').classList.add('hidden'); $('#auth').classList.remove('hidden'); }
+function showApp() { $('#auth').classList.add('hidden'); $('#app').classList.remove('hidden'); }
+$('#authSwitch').onclick = () => {
+  registerMode = !registerMode;
+  $('#authTitle').textContent = registerMode ? 'Регистрация' : 'Вход';
+  $('#authBtn').textContent = registerMode ? 'Создать аккаунт' : 'Войти';
+  $('#authSwitch').textContent = registerMode ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Регистрация';
+  $('#invite').classList.toggle('hidden', !registerMode);
+  $('#authErr').textContent = '';
+};
+$('#authBtn').onclick = async () => {
+  const body = { username: $('#username').value.trim(), password: $('#password').value };
+  if (registerMode) body.invite = $('#invite').value.trim();
+  try {
+    await api(registerMode ? '/register' : '/login', 'POST', body);
+    $('#password').value = ''; $('#authErr').textContent = '';
+    showApp(); load(); loadNotes();
+  } catch (e) { $('#authErr').textContent = e.message; }
+};
+$('#logout').onclick = async () => { await api('/logout', 'POST'); showAuth(); };
+
+// ---------- отрисовка ----------
+function ringSvg(p) {
+  return `<svg viewBox="0 0 44 44" width="84" height="84"><circle cx="22" cy="22" r="18" fill="none" stroke="var(--panel2)" stroke-width="5"/>` +
+    `<circle cx="22" cy="22" r="18" fill="none" stroke="var(--ok)" stroke-width="5" stroke-linecap="round" stroke-dasharray="${p * 1.131} 113.1" transform="rotate(-90 22 22)"/>` +
+    `<text x="22" y="26" text-anchor="middle" font-size="11" font-weight="600" fill="var(--text)">${p}%</text></svg>`;
+}
+
+function renderStats(tasks, dates) {
+  const done = tasks.filter(t => t.done).length;
+  $('#ring').innerHTML = ringSvg(tasks.length ? Math.round(100 * done / tasks.length) : 0);
+  $('#nAll').textContent = tasks.length;
+  $('#nDone').textContent = done;
+  $('#nImp').textContent = tasks.filter(t => t.important).length;
+  const counts = dates.map(d => tasks.filter(t => t.due_date === d).length);
+  const max = Math.max(...counts, 1);
+  const bars = $('#bars');
+  bars.replaceChildren();
+  dates.forEach((d, i) => bars.append(el('div', { className: 'bar' + (d === today() ? ' t' : ''), title: counts[i] + ' событий' }, [
+    el('i', { style: `height:${counts[i] ? Math.max(8, 54 * counts[i] / max) : 4}px` }),
+    WD[i],
+  ])));
+}
+
+async function load() {
+  const [tasks, up] = await Promise.all([api(`/tasks?day=${start}&days=7`), api('/upcoming?since=' + today())]);
+  const dates = [0, 1, 2, 3, 4, 5, 6].map(i => shift(start, i));
+  const mid = new Date(shift(start, 3) + 'T12:00:00');
+  $('#month').textContent = cap(mid.toLocaleDateString('ru-RU', { month: 'long' })) + ' ' + mid.getFullYear();
+  $('#range').textContent = ddmm(start) + ' — ' + ddmm(dates[6]);
+  $('#todaySub').textContent = ddmm(today()) + ', ' + WD[(new Date().getDay() + 6) % 7];
+
+  const days = $('#days');
+  days.replaceChildren();
+  dates.forEach((d, i) => {
+    const list = tasks.filter(t => t.due_date === d);
+    const done = list.filter(t => t.done).length;
+    const col = el('div', { className: 'day' + (d === today() ? ' today' : '') }, [
+      el('div', { className: 'dh' + (i > 4 ? ' we' : '') }, [el('b', { textContent: WD[i] }), el('span', { textContent: ddmm(d) })]),
+    ]);
+    if (list.length) {
+      const mini = el('div', { className: 'mini' }, [el('i', { style: `width:${100 * done / list.length}%` })]);
+      col.append(el('div', { className: 'dp' }, [mini, `${done}/${list.length}`]));
+    }
+    list.forEach(t => col.append(evNode(t)));
+    days.append(col);
+  });
+  renderStats(tasks, dates);
+  loadMini().catch(() => {});
+  loadExtras().catch(() => {});
+
+  const box = $('#upList');
+  box.replaceChildren();
+  if (!up.length) box.append(el('div', { className: 'muted', textContent: 'Ближайших событий нет. Нажмите «Добавить событие».' }));
+  up.forEach(t => {
+    const n = daysFromToday(t.due_date);
+    box.append(el('div', { className: 'panel upc' + (t.important ? ' imp' : '') }, [
+      el('div', { className: 'd' }, [
+        ddmm(t.due_date) + (t.due_time ? ', ' + t.due_time : ''),
+        el('span', { className: 'chip' + (n <= 0 ? ' now' : ''), textContent: n <= 0 ? 'сегодня' : n === 1 ? 'завтра' : 'через ' + n + ' дн.' }),
+      ]),
+      el('b', { textContent: (t.important ? '★ ' : '') + t.title }),
+    ]));
+  });
+}
+
+function evNode(t) {
+  const n = el('button', { className: 'ev' + (t.important ? ' imp' : '') + (t.done ? ' done' : '') }, [
+    el('span', { className: 't', textContent: t.due_time || '' }),
+    (t.important ? '★ ' : '') + t.title,
+  ]);
+  n.onclick = () => deleteMode ? remove(t) : openEvent(t);
+  return n;
+}
+
+async function act(fn) {
+  try { await fn(); await load(); } catch (e) { if (e.message !== 'auth') toast(e.message); }
+}
+
+// ---------- удаление ----------
+$('#delBtn').onclick = () => {
+  deleteMode = !deleteMode;
+  document.body.classList.toggle('delmode', deleteMode);
+  $('#delBtn').classList.toggle('active', deleteMode);
+  $('#delSub').textContent = deleteMode ? 'режим включён' : 'режим выключен';
+  $('#hint').classList.toggle('hidden', !deleteMode);
+};
+const remove = async t => { if (await ask('Удалить событие?', '«' + t.title + '»')) act(() => api('/tasks/' + t.id, 'DELETE')); };
+
+// ---------- добавление ----------
+$('#addBtn').onclick = () => {
+  $('#newTitle').value = ''; $('#newTime').value = ''; $('#newImp').checked = false;
+  $('#newDate').value = (today() >= start && today() <= shift(start, 6)) ? today() : start;
+  $('#addErr').textContent = '';
+  $('#addDlg').showModal(); $('#newTitle').focus();
+};
+$('#addCancel').onclick = () => $('#addDlg').close();
+$('#addOk').onclick = async () => {
+  const title = $('#newTitle').value.trim();
+  if (!title || !$('#newDate').value) { $('#addErr').textContent = 'Введите название и дату.'; return; }
+  try {
+    await api('/tasks', 'POST', { title, due_date: $('#newDate').value, due_time: $('#newTime').value || null, important: $('#newImp').checked });
+    $('#addDlg').close(); await load();
+  } catch (e) { $('#addErr').textContent = e.message; }
+};
+$('#newTitle').onkeydown = e => { if (e.key === 'Enter') $('#addOk').click(); };
+
+// ---------- окно события ----------
+function openEvent(t) {
+  current = t;
+  $('#evTitle').textContent = (t.due_time ? t.due_time + ' · ' : '') + t.title;
+  $('#evDone').checked = !!t.done; $('#evImp').checked = !!t.important;
+  $('#evDate').value = shift(t.due_date, 1);
+  $('#evDlg').showModal();
+}
+$('#evDone').onchange = () => act(() => api('/tasks/' + current.id, 'PATCH', { done: $('#evDone').checked }));
+$('#evImp').onchange = () => act(() => api('/tasks/' + current.id, 'PATCH', { important: $('#evImp').checked }));
+$('#evMove').onclick = async () => {
+  if (!$('#evDate').value) return;
+  await act(() => api(`/tasks/${current.id}/move`, 'POST', { new_date: $('#evDate').value }));
+  $('#evDlg').close();
+};
+$('#evClose').onclick = () => $('#evDlg').close();
+
+// ---------- мини-календарь ----------
+async function loadMini() {
+  const tasks = await api(`/tasks?day=${mini}&days=31`);
+  const info = {};
+  tasks.forEach(t => { const o = info[t.due_date] || (info[t.due_date] = { imp: false }); if (t.important) o.imp = true; });
+  const m = new Date(mini + 'T12:00:00');
+  $('#mTitle').textContent = cap(m.toLocaleDateString('ru-RU', { month: 'long' })) + ' ' + m.getFullYear();
+  const grid = $('#mGrid');
+  grid.replaceChildren();
+  WD.forEach(w => grid.append(el('div', { className: 'wl', textContent: w })));
+  const first = monday(mini), weekEnd = shift(start, 6);
+  for (let i = 0; i < 42; i++) {
+    const d = shift(first, i), inMonth = d.slice(0, 7) === mini.slice(0, 7);
+    const b = el('button', {
+      className: 'md' + (inMonth ? '' : ' o') + (d >= start && d <= weekEnd ? ' w' : '') + (d === today() ? ' t' : ''),
+      textContent: String(+d.slice(8)),
+    });
+    if (inMonth && info[d]) b.append(el('span', { className: 'dot' + (info[d].imp ? ' i' : '') }));
+    b.onclick = () => { start = monday(d); load(); };
+    grid.append(b);
+  }
+}
+$('#mPrev').onclick = () => { mini = monthOf(shift(mini, -1)); loadMini(); };
+$('#mNext').onclick = () => { mini = monthOf(shift(mini, 31)); loadMini(); };
+
+// ---------- заметки ----------
+let noteTimer;
+async function loadNotes() {
+  const r = await api('/notes');
+  $('#notes').value = r.text; $('#noteCnt').textContent = r.text.length;
+}
+$('#notes').oninput = () => {
+  $('#noteCnt').textContent = $('#notes').value.length;
+  $('#noteSt').textContent = 'сохраняю…';
+  clearTimeout(noteTimer);
+  noteTimer = setTimeout(async () => {
+    try { await api('/notes', 'PUT', { text: $('#notes').value }); $('#noteSt').textContent = 'сохранено'; }
+    catch (e) { if (e.message !== 'auth') $('#noteSt').textContent = 'не удалось сохранить'; }
+  }, 800);
+};
+
+// ---------- привычки и тепловая карта ----------
+async function loadExtras() { await Promise.all([loadHabits(), loadHeat()]); }
+async function actX(fn) {
+  try { await fn(); await loadExtras(); } catch (e) { if (e.message !== 'auth') toast(e.message); }
+}
+
+async function loadHabits() {
+  const list = await api(`/habits?start=${start}&today=${today()}`);
+  const box = $('#habits');
+  box.replaceChildren();
+  const head = el('div', { className: 'hh' }, [el('span')]);
+  WD.forEach(w => head.append(el('span', { textContent: w })));
+  head.append(el('span'), el('span'));
+  box.append(head);
+  if (!list.length) box.append(el('div', { className: 'muted', textContent: 'Добавьте первую привычку ниже.' }));
+  list.forEach(h => {
+    const row = el('div', { className: 'hr' }, [el('span', { className: 'hn', textContent: h.name, title: h.name })]);
+    h.week.forEach((on, i) => {
+      const d = shift(start, i);
+      const b = el('button', { className: 'hd' + (on ? ' on' : '') + (d === today() ? ' today' : ''), disabled: d > today(), title: ddmm(d) });
+      b.onclick = () => actX(() => api(`/habits/${h.id}/toggle`, 'POST', { day: d }));
+      row.append(b);
+    });
+    row.append(el('span', { className: 'chip', textContent: h.streak ? h.streak + ' дн.' : '—', title: 'Серия подряд' }));
+    row.append(el('button', { className: 'x', textContent: '×', title: 'Удалить привычку',
+      onclick: async () => { if (await ask('Удалить привычку?', '«' + h.name + '» и все её отметки.')) actX(() => api('/habits/' + h.id, 'DELETE')); } }));
+    box.append(row);
+  });
+}
+$('#habitAdd').onclick = () => {
+  const name = $('#habitName').value.trim();
+  if (!name) return;
+  actX(async () => { await api('/habits', 'POST', { name }); $('#habitName').value = ''; });
+};
+$('#habitName').onkeydown = e => { if (e.key === 'Enter') $('#habitAdd').click(); };
+
+async function loadHeat() {
+  const data = await api('/heatmap?end=' + today() + '&weeks=15');
+  const first = monday(shift(today(), -98));
+  const box = $('#heat');
+  box.replaceChildren();
+  let total = 0;
+  for (let i = 0; i < 105; i++) {
+    const d = shift(first, i), n = data[d] || 0;
+    if (d <= today()) total += n;
+    const lv = n === 0 ? 0 : n <= 1 ? 1 : n <= 3 ? 2 : n <= 5 ? 3 : 4;
+    box.append(el('i', { className: (lv ? 'l' + lv : '') + (d > today() ? ' fut' : '') + (d === today() ? ' td' : ''), title: ddmm(d) + ': ' + n }));
+  }
+  $('#heatTot').textContent = total + ' за 15 недель';
+}
+
+// ---------- навигация ----------
+const go = d => { start = d; mini = monthOf(shift(start, 3)); load(); };
+$('#prev').onclick = () => go(shift(start, -7));
+$('#next').onclick = () => go(shift(start, 7));
+$('#todayBtn').onclick = () => go(monday(today()));
+
+api('/tasks?day=' + start).then(() => { showApp(); load(); loadNotes(); }).catch(() => {});
+</script>
+</body>
+</html>
